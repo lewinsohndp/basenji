@@ -18,6 +18,45 @@ import tensorflow as tf
 
 from basenji import layers
 
+def task_split(inputs, block_args):
+  """do task specific training"""
+  current=inputs
+
+  all_splits = []
+  for split in range(block_args['splits']):
+    temp_current = current
+
+    for bi, block in enumerate(block_args['blocks']):
+      temp_block_args = {}
+      # extract name
+      block_name = block['name']
+      # set global defaults
+      global_vars = ['activation', 'batch_norm', 'bn_momentum', 'norm_type',
+        'l2_scale', 'l1_scale', 'padding', 'kernel_initializer']
+      for gv in global_vars:
+        try:
+          gv_value = block_args[gv]
+        except KeyError:
+          gv_value = False
+        if gv_value:
+          temp_block_args[gv] = gv_value
+
+      temp_block_args.update(block)
+      del temp_block_args['name']
+      
+      # add final activation if this is final layer
+      if block_name == 'final':
+        temp_current = layers.activate(temp_current, block_args['activation'])
+
+      block_func = name_func[block_name]
+      temp_current = block_func(temp_current, **temp_block_args)
+
+    all_splits.append(temp_current)
+
+  current = tf.concat(all_splits, axis=2)
+
+  return current
+
 """Trying to add task specific params"""
 def dense_task_split(inputs, splits, activation='relu', activation_end=None,
     flatten=False, dropout=0, l2_scale=0, l1_scale=0, residual=False,
@@ -66,7 +105,7 @@ def dense_task_split(inputs, splits, activation='relu', activation_end=None,
 
     # activation
     temp_current = layers.activate(temp_current, activation)
-    
+
     # dense
     temp_current = tf.keras.layers.Dense(
       units=split,
@@ -1868,7 +1907,8 @@ name_func = {
   'fpn1_unet': fpn1_unet,
   'upsample_unet': upsample_unet,
   'wheeze_excite': wheeze_excite,
-  'dense_task_split': dense_task_split
+  'dense_task_split': dense_task_split,
+  'task_split': task_split
 }
 
 keras_func = {

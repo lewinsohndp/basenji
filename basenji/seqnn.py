@@ -42,6 +42,7 @@ class SeqNN():
     self.augment_shift = [0]
     self.strand_pair = []
     self.verbose = True
+    self.final_activation = True
 
   def build_block(self, current, block_params):
     """Construct a SeqNN block.
@@ -93,11 +94,14 @@ class SeqNN():
         exit(1)
       block_args['unet_repr'] = unet_repr
 
+    if block_name == 'task_split':
+      block_func = blocks.name_func[block_name]
+      current = block_func(current, block_args)
+      
     # switch for block
-    if block_name[0].islower():
+    elif block_name[0].islower():
       block_func = blocks.name_func[block_name]
       current = block_func(current, **block_args)
-
     else:
       block_func = blocks.keras_func[block_name]
       current = block_func(**block_args)(current)
@@ -128,7 +132,8 @@ class SeqNN():
         self.reprs.append(current)
 
     # final activation
-    current = layers.activate(current, self.activation)
+    if self.final_activation:
+      current = layers.activate(current, self.activation)
 
     # make model trunk
     trunk_output = current
