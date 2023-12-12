@@ -18,6 +18,69 @@ import tensorflow as tf
 
 from basenji import layers
 
+"""Trying to add task specific params"""
+def dense_task_split(inputs, splits, activation='relu', activation_end=None,
+    flatten=False, dropout=0, l2_scale=0, l1_scale=0, residual=False,
+    norm_type=None, bn_momentum=0.99, norm_gamma=None,
+    kernel_initializer='he_normal', **kwargs ):
+  current = inputs
+  
+  all_splits = []
+  # loop through splits
+  for split in splits:
+    # rest current to original input
+    temp_current = current
+
+    # dense
+    temp_current = tf.keras.layers.Dense(
+      units=split,
+      use_bias=(norm_type is None),
+      kernel_initializer=kernel_initializer,
+      kernel_regularizer=tf.keras.regularizers.l1_l2(l1_scale, l2_scale)
+      )(temp_current)
+
+    # normalize
+    if norm_gamma is None:
+      norm_gamma = 'zeros' if residual else 'ones'
+    if norm_type == 'batch-sync':
+      temp_current = tf.keras.layers.experimental.SyncBatchNormalization(
+        momentum=bn_momentum, gamma_initializer=norm_gamma)(temp_current)
+    elif norm_type == 'batch':
+      temp_current = tf.keras.layers.BatchNormalization(
+        momentum=bn_momentum, gamma_initializer=norm_gamma)(temp_current)
+    elif norm_type == 'layer':
+      temp_current = tf.keras.layers.LayerNormalization(
+        gamma_initializer=norm_gamma)(temp_current)
+
+    # dropout
+    if dropout > 0:
+      temp_current = tf.keras.layers.Dropout(rate=dropout)(temp_current)
+
+    # residual add
+    if residual:
+      temp_current = tf.keras.layers.Add()([inputs,temp_current])
+
+    # end activation
+    if activation_end is not None:
+      temp_current = layers.activate(temp_current, activation_end)
+
+    # activation
+    temp_current = layers.activate(temp_current, activation)
+    
+    # dense
+    temp_current = tf.keras.layers.Dense(
+      units=split,
+      use_bias=True,
+      activation='softplus',
+      kernel_initializer=kernel_initializer,
+      kernel_regularizer=tf.keras.regularizers.l1_l2(l1_scale, l2_scale)
+      )(temp_current)
+
+    all_splits.append(temp_current)
+  
+  current = tf.concat(all_splits, axis=2)
+  return current
+
 ############################################################
 # Convolution
 ############################################################
@@ -1804,7 +1867,8 @@ name_func = {
   'fpn_unet': fpn_unet,
   'fpn1_unet': fpn1_unet,
   'upsample_unet': upsample_unet,
-  'wheeze_excite': wheeze_excite
+  'wheeze_excite': wheeze_excite,
+  'dense_task_split': dense_task_split
 }
 
 keras_func = {

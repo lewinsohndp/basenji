@@ -6,8 +6,6 @@ channels:
   - nvidia
 dependencies:
   - astropy
-  - cudatoolkit=11
-  - cudnn==8
   - cython
   - h5py
   - intervaltree
@@ -22,7 +20,7 @@ dependencies:
   - pybedtools
   - pybigwig
   - pysam
-  - python=3.8
+  - python=3.9
   - scikit-learn
   - scipy
   - seaborn
