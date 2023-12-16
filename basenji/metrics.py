@@ -103,6 +103,40 @@ class PoissonMultinomial(LossFunctionWrapper):
     super(PoissonMultinomial, self).__init__(
         pois_mn, name=name, reduction=reduction)
 
+"""Correlation Loss"""
+class CorrLoss(tf.keras.losses.Loss):
+  def call(self, y_true, y_pred):
+      print(y_true.shape)
+      print(y_pred.shape)
+      flat_true = y_true[:,0,:]
+      flat_pred = y_pred[:,0,:]
+      print(flat_true.shape)
+      print(flat_pred.shape)
+      true_corr = np.corrcoef(np.corrcoef(flat_true, rowvar=False))
+      pred_corr = np.corrcoef(np.corrcoef(flat_pred, rowvar=False))
+      print(true_corr.shape)
+      print(pred_corr.shape)
+      # get true correlation in training between all 
+      return (true_corr - pred_corr)**2
+
+class PoisCorrLoss(tf.keras.losses.Loss):
+  def call(self, y_true, y_pred):
+    pois_loss = tf.keras.losses.poisson(y_true, y_pred)
+    print(y_true.shape)
+    print(y_pred.shape)
+    flat_true = y_true[:,0,:]
+    flat_pred = y_pred[:,0,:]
+    print(flat_true.shape)
+    print(flat_pred.shape)
+    true_corr = np.corrcoef(np.corrcoef(flat_true, rowvar=False))
+    pred_corr = np.corrcoef(np.corrcoef(flat_pred, rowvar=False))
+    print(true_corr.shape)
+    print(pred_corr.shape)
+    # get true correlation in training between all 
+    corr_loss = (true_corr - pred_corr)**2
+
+    return tf.add(pois_loss, corr_loss)
+
 
 ################################################################################
 # Metrics
