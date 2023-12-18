@@ -55,7 +55,7 @@ def parse_loss(loss_label, strategy=None, keras_fit=True, spec_weight=1, total_w
     elif loss_label == 'poisson_mn':
       loss_fn = metrics.PoissonMultinomial(total_weight)
     elif loss_label == 'poisson_corr':
-      loss_fn = metrics.PoisCorrLoss()
+      loss_fn = metrics.PoisCorrLoss(spec_weight)
     else:
       loss_fn = tf.keras.losses.Poisson()
 
