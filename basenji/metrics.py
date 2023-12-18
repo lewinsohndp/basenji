@@ -7,6 +7,7 @@ from tensorflow.python.keras import backend as K
 from tensorflow.python.keras.utils import losses_utils
 from tensorflow.python.keras.losses import LossFunctionWrapper
 from tensorflow.python.keras.utils import metrics_utils
+import tensorflow_probability as tfp
 
 ################################################################################
 # Losses
@@ -104,7 +105,7 @@ class PoissonMultinomial(LossFunctionWrapper):
         pois_mn, name=name, reduction=reduction)
 
 """Correlation Loss"""
-class CorrLoss(tf.keras.losses.Loss):
+"""class CorrLoss(tf.keras.losses.Loss):
   def call(self, y_true, y_pred):
       print(y_true.shape)
       print(y_pred.shape)
@@ -112,12 +113,14 @@ class CorrLoss(tf.keras.losses.Loss):
       flat_pred = y_pred[:,0,:]
       print(flat_true.shape)
       print(flat_pred.shape)
+      true_corr = tfp.stats.correlation(flat_true, sample_axis=0)
+      pred_corr = tpf.stats.correlation(flat_pred, sample_axi
       true_corr = np.corrcoef(np.corrcoef(flat_true, rowvar=False))
       pred_corr = np.corrcoef(np.corrcoef(flat_pred, rowvar=False))
       print(true_corr.shape)
       print(pred_corr.shape)
       # get true correlation in training between all 
-      return (true_corr - pred_corr)**2
+      return (true_corr - pred_corr)**2"""
 
 class PoisCorrLoss(tf.keras.losses.Loss):
   def call(self, y_true, y_pred):
@@ -128,12 +131,12 @@ class PoisCorrLoss(tf.keras.losses.Loss):
     flat_pred = y_pred[:,0,:]
     print(flat_true.shape)
     print(flat_pred.shape)
-    true_corr = np.corrcoef(np.corrcoef(flat_true, rowvar=False))
-    pred_corr = np.corrcoef(np.corrcoef(flat_pred, rowvar=False))
+    true_corr = tfp.stats.correlation(flat_true, sample_axis=0)
+    pred_corr = tfp.stats.correlation(flat_pred, sample_axis=0)
     print(true_corr.shape)
     print(pred_corr.shape)
     # get true correlation in training between all 
-    corr_loss = (true_corr - pred_corr)**2
+    corr_loss = (tf.reduce_mean(true_corr) - tf.reduce_mean(pred_corr))**2
 
     return tf.add(pois_loss, corr_loss)
 
