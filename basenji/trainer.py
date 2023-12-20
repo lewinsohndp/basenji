@@ -101,7 +101,6 @@ class Trainer:
 
     # optimizer
     self.make_optimizer()
-
   def compile(self, seqnn_model):
     for model in seqnn_model.models:
       if self.loss == 'bce':

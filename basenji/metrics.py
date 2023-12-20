@@ -123,26 +123,28 @@ class PoissonMultinomial(LossFunctionWrapper):
       return (true_corr - pred_corr)**2"""
 
 class PoisCorrLoss(tf.keras.losses.Loss):
-  def __init__(self, corr_weight=1, name='poisson_corr_loss'):
+  def __init__(self, spec_weight=1, name='poisson_corr_loss'):
     super().__init__(name=name)
-    self.corr_weight = corr_weight
+    self.corr_weight = spec_weight 
 
   def call(self, y_true, y_pred):
     pois_loss = tf.keras.losses.poisson(y_true, y_pred)
-    print(y_true.shape)
-    print(y_pred.shape)
     flat_true = y_true[:,0,:]
     flat_pred = y_pred[:,0,:]
-    print(flat_true.shape)
-    print(flat_pred.shape)
     true_corr = tfp.stats.correlation(flat_true, sample_axis=0)
     pred_corr = tfp.stats.correlation(flat_pred, sample_axis=0)
-    print(true_corr.shape)
-    print(pred_corr.shape)
     # get true correlation in training between all 
-    corr_loss = (tf.reduce_mean(true_corr) - tf.reduce_mean(pred_corr))**2
-
-    return tf.add(pois_loss, self.corr_weight * corr_loss)
+    #corr_loss = (tf.reduce_mean(true_corr) - tf.reduce_mean(pred_corr))**2
+    # new strategy
+    # upper triangle
+    true_corr = tf.linalg.band_part(true_corr, 0, -1)
+    pred_corr = tf.linalg.band_part(pred_corr, 0, -1)
+    diff = true_corr - pred_corr
+    diff_square = tf.math.square(diff)
+    element_sum = tf.math.reduce_sum(diff_square)
+    element_nonzero = tf.math.count_nonzero(diff_square)
+    corr_loss = tf.cast(element_sum, 'int64') / element_nonzero
+    return tf.add(pois_loss, self.corr_weight * tf.cast(corr_loss, 'float32'))
 
 
 ################################################################################
