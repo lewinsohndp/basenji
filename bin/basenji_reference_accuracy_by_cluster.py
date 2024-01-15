@@ -22,6 +22,11 @@ def main():
         output_file = args[0]
         model_dir = output_file.split("/predict_beds")[0]
         targets_dir = args[1]
+        
+        try:
+            additional_targets_dir = args[2]
+        except IndexError:
+            additional_targets_dir = None
 
     targets = pd.read_csv(options.targets_file, sep="\t", header=0, index_col=0)
     cell_types = targets["identifier"].values
@@ -39,8 +44,15 @@ def main():
         preds_df = preds_df.merge(predict_regions, on=["chrom", "start", "end"], how="inner")
 
         for cell_type in cell_types:
-            cell_type_targets = pd.read_csv(f"{targets_dir}/{cluster}/{cell_type}_target_signal.out", sep="\t", 
-                                            index_col=0, names=["size", "covered", "sum", "mean0", "mean"])
+            try:
+                cell_type_targets = pd.read_csv(f"{targets_dir}/{cluster}/{cell_type}_target_signal.out", sep="\t", 
+                                                index_col=0, names=["size", "covered", "sum", "mean0", "mean"])
+            except FileNotFoundError:
+                if additional_targets_dir != None:
+                    cell_type_targets = pd.read_csv(f"{additional_targets_dir}/{cluster}/{cell_type}_target_signal.out", sep="\t", 
+                                                index_col=0, names=["size", "covered", "sum", "mean0", "mean"])
+                else: raise FileNotFoundError
+                
             cell_type_targets = cell_type_targets.loc[preds_df["name"].values]["sum"].values
             preds_df[f"{cell_type}_target"] = cell_type_targets
 
