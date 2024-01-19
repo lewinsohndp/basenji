@@ -16,17 +16,15 @@ def main():
     (options, args) = parser.parse_args()
     print(args)
     print(options)
-    if len(args) != 2:
+    if len(args) != 2 and len(args) != 3:
         parser.error('Must provide output_file and targets directory.')
     else:
         output_file = args[0]
         model_dir = output_file.split("/predict_beds")[0]
         targets_dir = args[1]
-        
-        try:
+        if len(args) == 3:
             additional_targets_dir = args[2]
-        except IndexError:
-            additional_targets_dir = None
+        else: additional_targets_dir = None 
 
     targets = pd.read_csv(options.targets_file, sep="\t", header=0, index_col=0)
     cell_types = targets["identifier"].values
@@ -39,8 +37,14 @@ def main():
         preds_df["chrom"] = preds["chrom"][:].astype(str)
         preds_df["start"] = preds["start"][:]
         preds_df["end"] = preds["end"][:]
+          
+        try:
+            predict_regions = pd.read_csv(f"{targets_dir}/{cluster}/predict_regions.bed", sep="\t", names=["chrom", "start", "end", "name"])
+        except FileNotFoundError:
+            if additional_targets_dir != None:
+                predict_regions = pd.read_csv(f"{additional_targets_dir}/{cluster}/{cluster}_test_chrs.bed", sep="\t", names=["chrom", "start", "end", "name"])
+            else: raise FileNotFoundError
 
-        predict_regions = pd.read_csv(f"{targets_dir}/{cluster}/predict_regions.bed", sep="\t", names=["chrom", "start", "end", "name"])
         preds_df = preds_df.merge(predict_regions, on=["chrom", "start", "end"], how="inner")
 
         for cell_type in cell_types:
