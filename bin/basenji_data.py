@@ -133,8 +133,8 @@ def main():
       default=0.05, type='str',
       help='Proportion of the data for validation [Default: %default]')
   parser.add_option('--combine_peaks', dest='combine_peaks',
-      default=False, action='store_true',
-      help='Combine peaks from whole folder [Default: %default]')
+      default=None, type='str',
+      help='Submit bed file with peaks to determine positive regions [Default: %default]')
   (options, args) = parser.parse_args()
 
   if len(args) != 2:
@@ -344,16 +344,35 @@ def main():
       else:
         fi = int(a[3].replace('fold',''))
       fold_mseqs[fi].append(msg)
-        
+  
   ################################################################
   # read sequence coverage values
   ################################################################
+  if options.combine_peaks != None:
+    """prepare to label"""
+    cmd='module load bedtools'
+    if options.run_local:
+      util.exec_par([cmd], options.processes, verbose=True)
+    else: raise Exception('not meant to be used with slurm option')
+
+    peaks_bed_file = f'{options.outdir}/peaks_intersect.bed'
+    cmd='bedtools intersect'
+    cmd+= f' -a {seqs_bed_file}'
+    cmd+= f' -b {options.combine_peaks}'
+    cmd+= ' -wao'
+    cmd+= ' -f 1'
+    cmd+= f' > {peaks_bed_file}'
+    
+    if options.run_local:
+      util.exec_par([cmd], options.processes, verbose=True)
+    else: raise Exception('not meant to be used with slurm option')
+
   seqs_cov_dir = '%s/seqs_cov' % options.out_dir
   if not os.path.isdir(seqs_cov_dir):
     os.mkdir(seqs_cov_dir)
 
   read_jobs = []
-
+  
   for ti in range(targets_df.shape[0]):
     genome_cov_file = targets_df['file'].iloc[ti]
     seqs_cov_stem = '%s/%d' % (seqs_cov_dir, ti)
@@ -374,7 +393,7 @@ def main():
     if options.restart and os.path.isfile(seqs_cov_file):
       print('Skipping existing %s' % seqs_cov_file, file=sys.stderr)
     else:
-      if options.combine_peaks:
+      if options.combine_peaks != None:
         cmd = 'basenji_data_read_combine.py'
       else:
         cmd = 'basenji_data_read.py'

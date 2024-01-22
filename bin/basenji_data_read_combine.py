@@ -29,6 +29,7 @@ except:
 import scipy.interpolate
 
 from basenji_data import ModelSeq
+from basenji import util
 
 """
 basenji_data_read.py
@@ -100,100 +101,100 @@ def main():
 
   # initialize sequences coverage file
   seqs_cov_open = h5py.File(seqs_cov_file, 'w')
+
+  # read in peaks 
+  output_dir = seqs_bed_file.split('/sequences.bed')[0]
+  peaks_intersect = pd.read_csv(f'{output_dir}/peaks_intersect.bed', 
+                                sep='\t', names=['chr','start','end', 'name', 'chr2', 'start2', 'end2', 'name', 'overlap'])
+  
   # seqs_cov_open.create_dataset('targets', shape=(num_seqs, target_length), dtype='float16')
-  targets = np.zeros(num_seqs)
-  print(targets.shape)
-  for genome_cov_file in os.listdir(genome_cov_folder):
-    print(f'starting {genome_cov_file}')
-    # open genome coverage file
-    genome_cov_file = f'{genome_cov_folder}/{genome_cov_file}'
-    genome_cov_open = CovFace(genome_cov_file)
+  targets = []
 
-    # for each model sequence
-    for si in range(num_seqs):
-      mseq = model_seqs[si]
+  # for each model sequence
+  for si in range(num_seqs):
+    mseq = model_seqs[si]
 
-      # read coverage
-      seq_cov_nt = genome_cov_open.read(mseq.chr, mseq.start, mseq.end)
+    # interpolate NaN
+    if options.interp_nan:
+      seq_cov_nt = interp_nan(seq_cov_nt)
 
-      # interpolate NaN
-      if options.interp_nan:
-        seq_cov_nt = interp_nan(seq_cov_nt)
+    # determine baseline coverage
+    if target_length >= 8:
+      baseline_cov = np.percentile(seq_cov_nt, 100*options.blacklist_pct)
+      baseline_cov = np.nan_to_num(baseline_cov)
+    else:
+      baseline_cov = 0
 
-      # determine baseline coverage
-      if target_length >= 8:
-        baseline_cov = np.percentile(seq_cov_nt, 100*options.blacklist_pct)
-        baseline_cov = np.nan_to_num(baseline_cov)
-      else:
-        baseline_cov = 0
+    # set blacklist to baseline
+    if mseq.chr in black_chr_trees:
+      for black_interval in black_chr_trees[mseq.chr][mseq.start:mseq.end]:
+        # adjust for sequence indexes
+        black_seq_start = black_interval.begin - mseq.start
+        black_seq_end = black_interval.end - mseq.start
+        black_seq_values = seq_cov_nt[black_seq_start:black_seq_end]
+        seq_cov_nt[black_seq_start:black_seq_end] = np.clip(black_seq_values, -baseline_cov, baseline_cov)
+        # seq_cov_nt[black_seq_start:black_seq_end] = baseline_cov
 
-      # set blacklist to baseline
-      if mseq.chr in black_chr_trees:
-        for black_interval in black_chr_trees[mseq.chr][mseq.start:mseq.end]:
-          # adjust for sequence indexes
-          black_seq_start = black_interval.begin - mseq.start
-          black_seq_end = black_interval.end - mseq.start
-          black_seq_values = seq_cov_nt[black_seq_start:black_seq_end]
-          seq_cov_nt[black_seq_start:black_seq_end] = np.clip(black_seq_values, -baseline_cov, baseline_cov)
-          # seq_cov_nt[black_seq_start:black_seq_end] = baseline_cov
+    # set NaN's to baseline
+    if not options.interp_nan:
+      nan_mask = np.isnan(seq_cov_nt)
+      seq_cov_nt[nan_mask] = baseline_cov
 
-      # set NaN's to baseline
-      if not options.interp_nan:
-        nan_mask = np.isnan(seq_cov_nt)
-        seq_cov_nt[nan_mask] = baseline_cov
+    # crop
+    if options.crop_bp > 0:
+      seq_cov_nt = seq_cov_nt[options.crop_bp:-options.crop_bp]
 
-      # crop
-      if options.crop_bp > 0:
-        seq_cov_nt = seq_cov_nt[options.crop_bp:-options.crop_bp]
+    # scale
+    seq_cov_nt = options.scale * seq_cov_nt
 
-      # scale
-      seq_cov_nt = options.scale * seq_cov_nt
+    # sum pool
+    seq_cov = seq_cov_nt.reshape(target_length, options.pool_width)
+    if options.sum_stat == 'sum':
+      seq_cov = seq_cov.sum(axis=1, dtype='float32')
+    elif options.sum_stat == 'sum_sqrt':
+      seq_cov = seq_cov.sum(axis=1, dtype='float32')
+      # seq_cov = -1 + (1+seq_cov)**0.75
+      seq_cov = -1 + np.sqrt(1+seq_cov)
+    elif options.sum_stat in ['mean', 'avg']:
+      seq_cov = seq_cov.mean(axis=1, dtype='float32')
+    elif options.sum_stat in ['mean_sqrt', 'avg_sqrt']:
+      seq_cov = seq_cov.mean(axis=1, dtype='float32')
+      # seq_cov = -1 + (1+seq_cov)**0.75
+      seq_cov = -1 + np.sqrt(1+seq_cov)
+    elif options.sum_stat == 'median':
+      seq_cov = seq_cov.median(axis=1)
+    elif options.sum_stat == 'max':
+      seq_cov = seq_cov.max(axis=1)
+    elif options.sum_stat == 'peak':
+      seq_cov = seq_cov.mean(axis=1, dtype='float32')
+      seq_cov = np.clip(np.sqrt(seq_cov*4), 0, 1)
+    elif options.sum_stat == 'binary_peak':
+      temp_row = peaks_intersect.iloc[si]
+      assert temp_row['chrom'] == mseq.chr
+      assert temp_row['start'] == mseq.start
+      assert temp_row['end'] == mseq.end
+      if temp_row['overlap'] == 192: seq_cov = np.array([1])
+      else: seq_cov = np.array([0])
+    else:
+      print('ERROR: Unrecognized summary statistic "%s".' % options.sum_stat,
+            file=sys.stderr)
+      exit(1)
 
-      # sum pool
-      seq_cov = seq_cov_nt.reshape(target_length, options.pool_width)
-      if options.sum_stat == 'sum':
-        seq_cov = seq_cov.sum(axis=1, dtype='float32')
-      elif options.sum_stat == 'sum_sqrt':
-        seq_cov = seq_cov.sum(axis=1, dtype='float32')
-        # seq_cov = -1 + (1+seq_cov)**0.75
-        seq_cov = -1 + np.sqrt(1+seq_cov)
-      elif options.sum_stat in ['mean', 'avg']:
-        seq_cov = seq_cov.mean(axis=1, dtype='float32')
-      elif options.sum_stat in ['mean_sqrt', 'avg_sqrt']:
-        seq_cov = seq_cov.mean(axis=1, dtype='float32')
-        # seq_cov = -1 + (1+seq_cov)**0.75
-        seq_cov = -1 + np.sqrt(1+seq_cov)
-      elif options.sum_stat == 'median':
-        seq_cov = seq_cov.median(axis=1)
-      elif options.sum_stat == 'max':
-        seq_cov = seq_cov.max(axis=1)
-      elif options.sum_stat == 'peak':
-        seq_cov = seq_cov.mean(axis=1, dtype='float32')
-        seq_cov = np.clip(np.sqrt(seq_cov*4), 0, 1)
-      else:
-        print('ERROR: Unrecognized summary statistic "%s".' % options.sum_stat,
-              file=sys.stderr)
-        exit(1)
+    # clip
+    if options.clip_soft is not None:
+      clip_mask = (seq_cov > options.clip_soft)
+      seq_cov[clip_mask] = options.clip_soft-1 + np.sqrt(seq_cov[clip_mask] - options.clip_soft+1)
+    if options.clip is not None:
+      seq_cov = np.clip(seq_cov, -options.clip, options.clip)
 
-      # clip
-      if options.clip_soft is not None:
-        clip_mask = (seq_cov > options.clip_soft)
-        seq_cov[clip_mask] = options.clip_soft-1 + np.sqrt(seq_cov[clip_mask] - options.clip_soft+1)
-      if options.clip is not None:
-        seq_cov = np.clip(seq_cov, -options.clip, options.clip)
-
-      # clip float16 min/max
+    # clip float16 min/max
       seq_cov = np.clip(seq_cov, np.finfo(np.float16).min, np.finfo(np.float16).max)
       
-      # save
-      if targets[si] == 0 and seq_cov.astype('float16') > 0: 
-        targets[si] = seq_cov.astype('float16') 
-        print(seq_cov.shape)
-        print(seq_cov)
-        break
+    # save
+    targets.append(seq_cov.astype('float16'))
 
-      # write
-      # seqs_cov_open['targets'][si,:] = seq_cov.astype('float16')
+    # write
+    # seqs_cov_open['targets'][si,:] = seq_cov.astype('float16')
 
   # clip extreme values
   targets = np.array(targets, dtype='float16')
@@ -204,9 +205,6 @@ def main():
   # write all
   seqs_cov_open.create_dataset('targets', data=targets, 
     dtype='float16', compression='gzip')
-
-  # close genome coverage file
-  genome_cov_open.close()
 
   # close sequences coverage file
   seqs_cov_open.close()
