@@ -105,7 +105,7 @@ def main():
   # read in peaks 
   output_dir = seqs_bed_file.split('/sequences.bed')[0]
   peaks_intersect = pd.read_csv(f'{output_dir}/peaks_intersect.bed', 
-                                sep='\t', names=['chr','start','end', 'name', 'chr2', 'start2', 'end2', 'name', 'overlap'])
+                                sep='\t', names=['chr','start','end', 'name', 'chr2', 'start2', 'end2', 'name2', 'overlap'])
   
   # seqs_cov_open.create_dataset('targets', shape=(num_seqs, target_length), dtype='float16')
   targets = []
@@ -114,63 +114,9 @@ def main():
   for si in range(num_seqs):
     mseq = model_seqs[si]
 
-    # interpolate NaN
-    if options.interp_nan:
-      seq_cov_nt = interp_nan(seq_cov_nt)
-
-    # determine baseline coverage
-    if target_length >= 8:
-      baseline_cov = np.percentile(seq_cov_nt, 100*options.blacklist_pct)
-      baseline_cov = np.nan_to_num(baseline_cov)
-    else:
-      baseline_cov = 0
-
-    # set blacklist to baseline
-    if mseq.chr in black_chr_trees:
-      for black_interval in black_chr_trees[mseq.chr][mseq.start:mseq.end]:
-        # adjust for sequence indexes
-        black_seq_start = black_interval.begin - mseq.start
-        black_seq_end = black_interval.end - mseq.start
-        black_seq_values = seq_cov_nt[black_seq_start:black_seq_end]
-        seq_cov_nt[black_seq_start:black_seq_end] = np.clip(black_seq_values, -baseline_cov, baseline_cov)
-        # seq_cov_nt[black_seq_start:black_seq_end] = baseline_cov
-
-    # set NaN's to baseline
-    if not options.interp_nan:
-      nan_mask = np.isnan(seq_cov_nt)
-      seq_cov_nt[nan_mask] = baseline_cov
-
-    # crop
-    if options.crop_bp > 0:
-      seq_cov_nt = seq_cov_nt[options.crop_bp:-options.crop_bp]
-
-    # scale
-    seq_cov_nt = options.scale * seq_cov_nt
-
-    # sum pool
-    seq_cov = seq_cov_nt.reshape(target_length, options.pool_width)
-    if options.sum_stat == 'sum':
-      seq_cov = seq_cov.sum(axis=1, dtype='float32')
-    elif options.sum_stat == 'sum_sqrt':
-      seq_cov = seq_cov.sum(axis=1, dtype='float32')
-      # seq_cov = -1 + (1+seq_cov)**0.75
-      seq_cov = -1 + np.sqrt(1+seq_cov)
-    elif options.sum_stat in ['mean', 'avg']:
-      seq_cov = seq_cov.mean(axis=1, dtype='float32')
-    elif options.sum_stat in ['mean_sqrt', 'avg_sqrt']:
-      seq_cov = seq_cov.mean(axis=1, dtype='float32')
-      # seq_cov = -1 + (1+seq_cov)**0.75
-      seq_cov = -1 + np.sqrt(1+seq_cov)
-    elif options.sum_stat == 'median':
-      seq_cov = seq_cov.median(axis=1)
-    elif options.sum_stat == 'max':
-      seq_cov = seq_cov.max(axis=1)
-    elif options.sum_stat == 'peak':
-      seq_cov = seq_cov.mean(axis=1, dtype='float32')
-      seq_cov = np.clip(np.sqrt(seq_cov*4), 0, 1)
-    elif options.sum_stat == 'binary_peak':
+    if options.sum_stat == 'binary_peak':
       temp_row = peaks_intersect.iloc[si]
-      assert temp_row['chrom'] == mseq.chr
+      assert temp_row['chr'] == mseq.chr
       assert temp_row['start'] == mseq.start
       assert temp_row['end'] == mseq.end
       if temp_row['overlap'] == 192: seq_cov = np.array([1])
@@ -189,7 +135,7 @@ def main():
 
     # clip float16 min/max
       seq_cov = np.clip(seq_cov, np.finfo(np.float16).min, np.finfo(np.float16).max)
-      
+    
     # save
     targets.append(seq_cov.astype('float16'))
 

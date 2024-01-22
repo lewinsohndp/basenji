@@ -355,7 +355,7 @@ def main():
       util.exec_par([cmd], options.processes, verbose=True)
     else: raise Exception('not meant to be used with slurm option')
 
-    peaks_bed_file = f'{options.outdir}/peaks_intersect.bed'
+    peaks_bed_file = f'{options.out_dir}/peaks_intersect.bed'
     cmd='bedtools intersect'
     cmd+= f' -a {seqs_bed_file}'
     cmd+= f' -b {options.combine_peaks}'
