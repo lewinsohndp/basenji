@@ -35,6 +35,7 @@ def main():
 
     log_performance_by_cluster = pd.DataFrame([], index=clusters, columns=cell_types)
     for cluster in clusters:
+        print(cluster)
         preds = h5py.File(f"{model_dir}/predict_beds/{cluster}/predict.h5", "r")
         preds_df = pd.DataFrame(np.nan_to_num(np.squeeze(preds["preds"][:,:,:])), columns=[f"{ct}_pred" for ct in cell_types])  
         preds_df["chrom"] = preds["chrom"][:].astype(str)
@@ -57,7 +58,7 @@ def main():
                 else: raise FileNotFoundError
 
         preds_df = preds_df.merge(predict_regions, on=["chrom", "start", "end"], how="inner")
-
+        print(preds_df.shape)
         for cell_type in cell_types:
             if options.blocklist:
                 try:
@@ -77,7 +78,8 @@ def main():
                         cell_type_targets = pd.read_csv(f"{additional_targets_dir}/{cluster}/{cell_type}_target_signal.out", sep="\t", 
                                                     index_col=0, names=["size", "covered", "sum", "mean0", "mean"])
                     else: raise FileNotFoundError
-                
+            print(cell_type)
+            print(cell_type_targets.shape)     
             cell_type_targets = cell_type_targets.loc[preds_df["name"].values]["sum"].values
             preds_df[f"{cell_type}_target"] = cell_type_targets
 
