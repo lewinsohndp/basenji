@@ -101,10 +101,12 @@ def main():
   # initialize sequences coverage file
   seqs_cov_open = h5py.File(seqs_cov_file, 'w')
   # seqs_cov_open.create_dataset('targets', shape=(num_seqs, target_length), dtype='float16')
-  targets = np.zeros(range(num_seqs))
-
-  for genome_cov_file in os.listdir(genome_cov_file):
+  targets = np.zeros(num_seqs)
+  print(targets.shape)
+  for genome_cov_file in os.listdir(genome_cov_folder):
+    print(f'starting {genome_cov_file}')
     # open genome coverage file
+    genome_cov_file = f'{genome_cov_folder}/{genome_cov_file}'
     genome_cov_open = CovFace(genome_cov_file)
 
     # for each model sequence
@@ -182,9 +184,13 @@ def main():
 
       # clip float16 min/max
       seq_cov = np.clip(seq_cov, np.finfo(np.float16).min, np.finfo(np.float16).max)
-
+      
       # save
-      targets[si] = (seq_cov.astype('float16'))
+      if targets[si] == 0 and seq_cov.astype('float16') > 0: 
+        targets[si] = seq_cov.astype('float16') 
+        print(seq_cov.shape)
+        print(seq_cov)
+        break
 
       # write
       # seqs_cov_open['targets'][si,:] = seq_cov.astype('float16')
