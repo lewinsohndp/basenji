@@ -132,6 +132,9 @@ def main():
   parser.add_option('-v', dest='valid_pct_or_chr',
       default=0.05, type='str',
       help='Proportion of the data for validation [Default: %default]')
+  parser.add_option('--combine_peaks', dest='combine_peaks',
+      default=False, action='store_true',
+      help='Combine peaks from whole folder [Default: %default]')
   (options, args) = parser.parse_args()
 
   if len(args) != 2:
@@ -371,7 +374,10 @@ def main():
     if options.restart and os.path.isfile(seqs_cov_file):
       print('Skipping existing %s' % seqs_cov_file, file=sys.stderr)
     else:
-      cmd = 'basenji_data_read.py'
+      if options.combine_peaks:
+        cmd = 'basenji_data_read_combine.py'
+      else:
+        cmd = 'basenji_data_read.py'
       # cmd += ' --crop %d' % options.crop_bp
       cmd += ' -w %d' % options.pool_width
       cmd += ' -u %s' % targets_df['sum_stat'].iloc[ti]
